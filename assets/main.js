@@ -282,7 +282,21 @@
     // h1 pierwszego ekranu (hero) — jedyny ruch, jaki hero dostaje
     var h1 = document.querySelector('section h1, header h1, .hero h1, .hero-cine h1');
     if (h1 && !splitLines(h1)) { h1.classList.add('mt-fade'); }
-    if (h1) { requestAnimationFrame(function () { h1.classList.add('mt-in'); }); }
+    // Strona z ekranem powitalnym: tytuł hero czeka pod zasłoną i wjeżdża dopiero,
+    // gdy kurtyna odsłoni jego miejsce (zdarzenie `wejscie:koniec` z index.html).
+    // Bez tego cały wjazd linia po linii gra ZA kurtyną i klient go nie widzi.
+    // Bezpiecznik: gdyby wejście padło albo zdarzenie nie przyszło, tytuł wchodzi sam.
+    if (h1) {
+      var pusc = function () { h1.classList.add('mt-in'); };
+      if (document.documentElement.classList.contains('intro-on')) {
+        document.addEventListener('wejscie:koniec', function () {
+          requestAnimationFrame(pusc);
+        }, { once: true });
+        setTimeout(pusc, 3200);
+      } else {
+        requestAnimationFrame(pusc);
+      }
+    }
 
     // nagłówki sekcji — wchodzą, gdy sekcja pojawia się w oknie
     var heads = all('.head h2').filter(function (h) { return !firstScreen(h); });

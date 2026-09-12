@@ -1863,3 +1863,209 @@ footer{view-transition-name:mt-foot}
    wraca oryginalny kolor. */
 .nav .brand-logo{filter:brightness(0) invert(1);transition:filter .35s ease}
 .nav.nav-solid .brand-logo{filter:none}
+
+
+/* ============================================================
+   EKRAN POWITALNY — „PACKA" (prośba Szymona, 12.09.2026)
+   ------------------------------------------------------------
+   Historia efektu: kurtyna w kolorze świeżo zatartego tynku (jasna,
+   bo strona pod nią otwiera się CIEMNYM kadrem szmaragdowego marmuru —
+   kontrast jest całym efektem, wzorzec Meble FRONT). Znak wyłania się
+   skośnym przejazdem packi (maska + blur→ostrość, ZERO zwykłego fade),
+   pod nim dociąga się złota żyłka — ten sam motyw, który firma kładzie
+   na ścianach. Potem płaszczyzna tynku zjeżdża w dół ze złotą krawędzią,
+   a znak leci do paska i ZMNIEJSZA się do swojego miejsca.
+   Na koniec pasek rozpuszcza się w zdjęciu, a znak przechodzi na biel
+   tym samym przejściem, którym robi to przy przewijaniu.
+
+   Reguły, których tu pilnujemy (skill `wejscie-na-strone`):
+   • zasłona domyślnie display:none — włącza ją WYŁĄCZNIE skrypt,
+   • ⛔ ŻADNEGO drop-shadow na znaku w żadnym stanie (iOS rysuje z tego
+     jasny prostokąt — zgłoszone przez K. dwa razy z telefonu),
+   • ⛔ żadnego skalowania znaku W GÓRĘ — na kurtynie ma swój prawdziwy
+     rozmiar (--i-w/--i-h), do paska wraca scale() MNIEJSZYM od 1,
+   • pasek bez backdrop-filter na czas wejścia (WebKit rysuje rozmycie
+     rodzica NAD lecącym dzieckiem),
+   • znak leci DOKŁADNIE ten sam element co w pasku, nie kopia,
+   • zasłona ma krzywą z WOLNYM startem — krawędź czeka, aż znak ją minie.
+   ============================================================ */
+
+/* zasłony nie ma, dopóki skrypt nie zapali .intro-on na <html> */
+.intro-kurtyna{display:none}
+
+html.intro-on,html.intro-po{
+  --i-ease:cubic-bezier(.16,1,.3,1);          /* expo-out: mocny start, długie wyhamowanie */
+  --i-zloto:#C9A96A;                          /* żyłka - ton zdjęty z płatków złota na zdjęciu hero */
+  --i-zloto-lit:#E8D6AC;
+  /* Faktura tynku stoi w JEDNYM miejscu, bo biorą ją DWIE warstwy: pełnoekranowa
+     kurtyna i pasek pod nagłówkiem. Malowane osobno rozjeżdżały się o 6/255 i na
+     styku rysowały kreskę przez całą szerokość ekranu (zmierzone 12.09.2026).
+     Zmienna żyje też przy .intro-po - inaczej pasek nie miałby czym się rozpuścić. */
+  --i-tynk:
+    linear-gradient(112deg,rgba(255,255,255,0) 13%,rgba(255,255,255,.70) 33%,rgba(255,255,255,0) 55%),
+    linear-gradient(96deg,rgba(255,255,255,0) 48%,rgba(255,255,255,.42) 68%,rgba(255,255,255,0) 86%),
+    radial-gradient(135% 115% at 13% 6%,rgba(255,255,255,.94) 0%,rgba(255,255,255,0) 58%),
+    radial-gradient(115% 100% at 88% 95%,rgba(186,197,209,.42) 0%,rgba(186,197,209,0) 62%),
+    repeating-linear-gradient(23deg,rgba(21,33,46,.022) 0 1px,rgba(21,33,46,0) 1px 11px),
+    var(--paper);
+}
+
+/* ---------- 1) PŁASZCZYZNA TYNKU ---------- */
+/* 🔴 PŁACHTA JEDZIE NA `transform`, NIE NA `clip-path` (zmierzone 12.09.2026).
+   Na clip-path całą warstwę trzeba PRZEMALOWAĆ w każdej klatce - a to płaszczyzna
+   na cały ekran z pięcioma gradientami. Pomiar stylów pokazywał zgodność co do
+   promila, ale na NAGRANIU złota krawędź (własna warstwa GPU) wyprzedzała tynk
+   o kilkaset pikseli: przez pół sekundy kreska wisiała w powietrzu nad płachtą,
+   a na telefonie doszło do tego szarpanie. Na transformacie płachta jedzie jako
+   gotowa bitmapa (zero przemalowań), więc krawędź, faktura i żyłka są zgrane
+   pikselowo, bo są DZIECKIEM tej samej warstwy. */
+html.intro-on .intro-kurtyna{
+  display:block;position:fixed;inset:0;z-index:9000;overflow:hidden;
+  transform:translateY(0);
+  transition:transform .68s cubic-bezier(.66,0,.24,1);
+  will-change:transform;
+}
+/* 🔴 KIERUNEK: płaszczyzna JEDZIE W GÓRĘ, nie w dół (zmierzone 12.09.2026).
+   Przy zasłonie schodzącej w dół krawędź wyprzedzała lecący do paska znak i przez
+   ~450 ms CIEMNE logo stało na CIEMNYM zdjęciu jak naklejka (dokładnie wpadka
+   STOLMARA). Tu krawędź i znak jadą w TĘ SAMĄ stronę, więc znak zostaje pod tynkiem
+   aż do końca, a pod nim czeka już jasny pasek w tym samym kolorze — przekazanie
+   jest bezszwowe. Bonus: kurtyna zachowuje się jak kurtyna w teatrze. */
+html.intro-on.intro-out .intro-kurtyna{transform:translateY(-100%)}
+
+/* faktura: szerokie przejazdy światła + JEDEN kierunek drobnych śladów packi.
+   ⚠️ Dwa krzyżujące się rastry sprawdzone i odrzucone: na telefonie (DPR 3)
+   rysują ostrą kratkę jak papier milimetrowy, a nie zatarty tynk. Ślady packi
+   idą i tak w jedną stronę, więc jeden kierunek jest też prawdziwszy.
+   Alfy są celowo minimalne — ma się czytać jako MATERIAŁ, nie jako deseń. */
+html.intro-on .ik-tynk{position:absolute;inset:0;background:var(--i-tynk)}
+
+/* ---------- 1b) PASEK POD NAGŁÓWKIEM - TEN SAM TYNK, tylko zostaje chwilę dłużej ----------
+   Leży POD kurtyną (niższy z-index), więc złota krawędź przejeżdża po nim do samej
+   góry ekranu, a dopiero potem pasek rozpuszcza się w zdjęciu - i to on, a nie
+   zakazana poświata, trzyma czytelność ciemnego znaku, gdy tynk już zszedł.
+   Rozmiar faktury bierzemy z PIKSELI okna (--i-vw/--i-vh), nie ze 100vw: 100vw
+   liczy się razem z paskiem przewijania i deseń rozjechałby się o kilkanaście px. */
+.intro-pasek{display:none}
+html.intro-on .intro-pasek,html.intro-po .intro-pasek{
+  display:block;position:fixed;left:0;right:0;top:0;height:var(--i-pasek,72px);
+  /* 🔴 z-index MUSI być poniżej nagłówka (100): po zdjęciu klas pasek nawigacji
+     wraca ze swoich 9001 na 100 i warstwa tynku przykryłaby znak - zmierzone
+     12.09.2026, znak znikał na ~0,15 s dokładnie w tym miejscu. Nad treścią
+     strony i tak jest, a kurtyna (9000) nadal jedzie po nim. */
+  z-index:90;pointer-events:none;
+  background:var(--i-tynk);
+  background-size:var(--i-vw,100vw) var(--i-vh,100vh);
+  background-position:0 0;background-repeat:no-repeat;
+  /* .32s, nie .42s: zanik paska i powrót ciemnej poświaty nagłówka mają skończyć
+     się RAZEM (poświata ma .32s niżej), inaczej tło pod znakiem siedzi w połowie
+     drogi - szare - o kilkadziesiąt milisekund dłużej, niż trwa zamiana koloru znaku. */
+  transition:opacity .32s ease;
+}
+html.intro-po .intro-pasek{opacity:0}
+/* Ciemna poświata nagłówka wraca w tym samym tempie co znika pasek (bazowo .35s). */
+html.intro-po .nav::after{transition:opacity .32s ease}
+
+/* ---------- 2) ZŁOTA KRAWĘDŹ NA DOLE PŁACHTY ----------
+   ⚠️ ŻADNEJ własnej animacji: kreska siedzi na dolnej krawędzi tynku i jedzie
+   RAZEM Z NIM, bo jest jego dzieckiem. Druga animowana warstwa (poprzednia wersja
+   z osobnym translate) rozjeżdżała się z płachtą na nagraniu - patrz punkt 1.
+   Zapala się dopiero, gdy płachta rusza: przed ruchem kreska na dole ekranu
+   wyglądałaby jak przypadkowa linijka. */
+html.intro-on .ik-krawedz{
+  position:absolute;left:0;right:0;bottom:0;height:2px;pointer-events:none;
+}
+html.intro-on .ik-krawedz::before{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,rgba(201,169,106,0) 0%,rgba(201,169,106,.72) 16%,
+    var(--i-zloto-lit) 50%,rgba(201,169,106,.72) 84%,rgba(201,169,106,0) 100%);
+  box-shadow:0 -10px 26px -10px rgba(201,169,106,.58);
+  opacity:0;transition:opacity .24s ease;
+}
+html.intro-on.intro-out .ik-krawedz::before{opacity:1}
+
+/* ---------- 3) ŻYŁKA POD ZNAKIEM (takt drugi, opóźniony) ---------- */
+html.intro-on .ik-zylka{
+  position:absolute;left:50%;top:calc(50% + var(--i-h,0px) / 2 + 26px);
+  width:var(--i-w,0px);height:1px;margin-left:calc(var(--i-w,0px) / -2);
+  background:linear-gradient(90deg,rgba(201,169,106,0) 0%,var(--i-zloto) 22%,
+    var(--i-zloto-lit) 50%,var(--i-zloto) 78%,rgba(201,169,106,0) 100%);
+  transform:scaleX(0);transform-origin:left center;
+  transition:transform .46s var(--i-ease) .14s;
+}
+html.intro-on.intro-gra .ik-zylka{transform:scaleX(1)}
+html.intro-on.intro-out .ik-zylka{opacity:0;transition:opacity .26s ease}
+
+/* ---------- 4) ZNAK ----------
+   .brand musi UTRZYMAĆ miejsce logo w pasku (obraz wychodzi z układu),
+   inaczej nagłówek zapada się na czas wejścia i podskakuje po kurtynie. */
+html.intro-on .nav{z-index:9001;background:transparent;
+  backdrop-filter:none;-webkit-backdrop-filter:none}
+/* Pasek leży NAD kurtyną (żeby znak był widoczny), więc jego ciemna poświata
+   dla czytelności nad zdjęciem malowała szarą płachtę na tynku. Gasimy ją na
+   czas wejścia; wraca sama, własnym przejściem .35 s, razem z resztą paska. */
+html.intro-on .nav::after{opacity:0}
+html.intro-on .nav .brand{pointer-events:none}
+html.intro-on:not(.intro-mierze) .nav .brand{
+  width:var(--i-baza-w,auto);height:var(--i-baza-h,auto);flex:0 0 auto;
+}
+html.intro-on:not(.intro-mierze) .nav .brand-logo{
+  position:fixed;left:50%;top:50%;
+  width:var(--i-w,1px);height:var(--i-h,1px);max-width:none;
+  transform:translate(-50%,-50%) scale(1.045);
+  clip-path:polygon(0 0,0 0,-35% 100%,-35% 100%);
+  filter:brightness(1) invert(0) blur(14px);
+  transition:transform .52s var(--i-ease),clip-path .52s var(--i-ease),filter .52s var(--i-ease);
+  will-change:transform,clip-path,filter;
+}
+/* takt pierwszy: skośny przejazd packi odsłania znak i wyostrza go */
+html.intro-on.intro-gra:not(.intro-mierze) .nav .brand-logo{
+  transform:translate(-50%,-50%) scale(1);
+  clip-path:polygon(0 0,135% 0,100% 100%,-35% 100%);
+  filter:brightness(1) invert(0) blur(0px);
+}
+/* takt czwarty: przelot do paska — TYLKO zmniejszanie (scale < 1) */
+html.intro-on.intro-out:not(.intro-mierze) .nav .brand-logo{
+  transform:translate(calc(-50% + var(--i-px,0px)),calc(-50% + var(--i-py,0px)))
+            scale(var(--i-zmniejsz,1));
+  transition:transform .76s cubic-bezier(.16,.84,.44,1);
+}
+/* ⛔ Pasek NIE dostaje własnego jasnego tła na czas wejścia - płaski kolor pod
+   nagłówkiem rysował na tynku prostokąt widoczny przez całą szerokość. Czytelność
+   ciemnego znaku trzyma warstwa .intro-pasek (ta sama faktura co kurtyna). */
+
+/* Po zdjęciu klas pasek rozpuszcza się w zdjęciu, a znak przechodzi na biel —
+   tym samym przejściem .35s, którym robi to przy przewijaniu. Żeby filtr
+   MIAŁ CO interpolować, obie strony mają tę samą listę funkcji. */
+.nav .brand-logo{filter:brightness(0) invert(1) blur(0px)}
+.nav.nav-solid .brand-logo{filter:brightness(1) invert(0) blur(0px)}
+/* 🔴 ZAMIANA KOLORU ZNAKU: JEDNO SZYBKIE CIĘCIE W PÓŁMETKU TŁA (12.09.2026).
+   Tło pod znakiem jedzie z jasnego tynku na ciemne zdjęcie, a znak z ciemnego na biały.
+   Obie jasności muszą się gdzieś minąć - i jeśli mijają się POWOLI, znak na moment
+   znika (objaw ze STOLMARA: „logo pojawia się i znika"). Zmierzone na nagraniu, oknem
+   rozstępu jasności w prostokącie znaku (0-255, poniżej ~45 znak jest nieczytelny):
+     .38 s przejścia            -> rozstęp spadał do ~10 na ~0,2 s,
+     .18 s z opóźnieniem .13 s  -> do 16 na ~60 ms,
+     .1 s liniowo, opóźnienie .065 s -> 63, czyli znak czytelny przez CAŁE przekazanie.
+   Sedno: tło potrzebuje .32 s na zmianę, więc znak musi przeskoczyć swoją drogę
+   3x szybciej i DOKŁADNIE w chwili, gdy tło jest w połowie (tło ease -> półmetek
+   w ~0,115 s, znak liniowo -> półmetek w 0,065+0,05 = 0,115 s). Wtedy przed cięciem
+   ciemny znak leży na jeszcze jasnym tle, a po cięciu biały na już ciemnym.
+   ⚠️ Nie wydłużaj tego przejścia „dla płynności" - płynność robi tu tło, nie znak. */
+html.intro-po .nav .brand-logo{transition:filter .1s linear .065s}
+
+/* ---------- 5) MENU WCHODZI DOPIERO PO KURTYNIE ----------
+   Animacja (nie przejście) na TRWAŁEJ klasie .intro-po — inaczej zagrałaby
+   drugi raz przy zdejmowaniu klas albo szarpnęła opacity bez przejścia. */
+html.intro-on .nav .nav-links,
+html.intro-on .nav .nav-toggle{opacity:0}
+html.intro-po .nav .nav-links,
+html.intro-po .nav .nav-toggle{animation:introMenu .6s cubic-bezier(.16,1,.3,1) both}
+@keyframes introMenu{from{opacity:0}to{opacity:1}}
+
+/* ---------- 6) BEZPIECZNIK: kto woli spokój, nie widzi wejścia ---------- */
+@media(prefers-reduced-motion:reduce){
+  .intro-kurtyna,.intro-pasek{display:none!important}
+  html.intro-po .nav .nav-links,
+  html.intro-po .nav .nav-toggle{animation:none}
+}

@@ -3,6 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preload" as="image" href="img/logo.png" fetchpriority="high">
+<script>
+/* EKRAN POWITALNY — zapala klasy PRZED pierwszą klatką. Musi stać w <head>
+   i BEZ defer: z defer przez ułamek sekundy widać stronę, a potem kurtynę. */
+(function(){try{
+  var h=document.documentElement;
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  var znowu=/[?&]intro(=|&|$)/.test(location.search);   /* ?intro = zagraj ponownie */
+  if(!znowu){try{
+    if(sessionStorage.getItem('sd_wejscie'))return;     /* raz na wizytę, nie na podstronę */
+    sessionStorage.setItem('sd_wejscie','1');
+  }catch(e){}}
+  h.classList.add('intro-on');
+}catch(e){}})();
+</script>
 <title>Spontan Dekor - tynki dekoracyjne · Kędzierzyn-Koźle</title>
 <meta name="description" content="Spontan Dekor, Kędzierzyn-Koźle - tynki dekoracyjne i wykończenia wnętrz. Efekt marmuru, betonu, kamienia i złota, na włoskich materiałach Giorgio Graesan i Antonio Liso. Robimy też gładzie i malowanie. Ocena 5,0 w Google. Zadzwoń i umów oglądziny ściany.">
 <link rel="canonical" href="https://kris20032.github.io/spontandekor/">
@@ -21,9 +36,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/styles.css?v=c5d7768f">
+<link rel="stylesheet" href="assets/styles.css?v=219c319c">
 </head>
 <body>
+
+<div class="intro-kurtyna" aria-hidden="true"><i class="ik-tynk"></i><i class="ik-zylka"></i><i class="ik-krawedz"></i></div>
+<div class="intro-pasek" aria-hidden="true"></div>
+
 
 <header class="nav">
   <div class="wrap nav-inner">
@@ -38,6 +57,151 @@
     <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
   </div>
 </header>
+
+<script>
+/* EKRAN POWITALNY — pomiar i takty. Stoi TUŻ ZA </header> celowo: z końca strony
+   (main.js) start wypada ~300 ms później, a całe wejście ma budżet ~1,5 s.
+   Kurtyna NIE RUSZA, dopóki logo nie jest pobrane I ZDEKODOWANE — inaczej cały
+   takt wyłaniania gra na pustym miejscu, a plik pojawia się w połowie przelotu. */
+(function(){
+  var h=document.documentElement;
+  if(!h.classList.contains('intro-on'))return;
+
+  var kurtyna=document.querySelector('.intro-kurtyna');
+  var obraz=document.querySelector('.nav .brand-logo');
+  var MIN=680,SUFIT=880,CZEKANIE=1400;      /* SUFIT policzony WSTECZ z budżetu 1,5 s */
+  var zamkniete=false,start=0,zaladowane=false,hero=null;
+
+  /* Nagłówek hero NIE gra pod zasłoną - czeka na to zdarzenie i wjeżdża linia po
+     linii dopiero, gdy tynk odsłoni jego miejsce. Bez tego najładniejszy takt strony
+     odbywa się za kurtyną, a klient dostaje gotowy, nieruchomy tytuł (wzorzec Meble
+     FRONT). Bezpiecznik na wypadek, gdyby wejście padło, siedzi w main.js. */
+  var ogloszone=false;
+  function ogloszKoniec(){
+    if(ogloszone)return;
+    ogloszone=true;
+    try{document.dispatchEvent(new Event('wejscie:koniec'));}
+    catch(e){var z=document.createEvent('Event');z.initEvent('wejscie:koniec',false,false);
+             document.dispatchEvent(z);}
+  }
+
+  function sprzataj(){
+    ogloszKoniec();
+    if(zamkniete)return;
+    zamkniete=true;
+    h.classList.remove('intro-on','intro-gra','intro-out','intro-mierze');
+    h.classList.add('intro-po');
+  }
+  if(!kurtyna||!obraz){sprzataj();return;}
+
+  /* 🔴 SPÓŹNIONEGO WEJŚCIA NIE GRAMY (zmierzone 12.09.2026 z dławieniem łącza do
+     1,6 Mb/s). Arkusz stylów w <head> WSTRZYMUJE wykonanie tego skryptu, więc na
+     wolnym łączu ruszał on dopiero po ~2,4 s - i doklejał klientowi jeszcze 1,7 s
+     kurtyny na wierzch. Kto już czekał na stronę, ma ją zobaczyć od razu.
+     Sprawdzamy DWA razy: tu (żeby nie czekać jeszcze na logo z zasłoną na ekranie)
+     i w graj() (bo czekanie na logo samo w sobie może przekroczyć budżet). */
+  function zaPozno(){return !!(window.performance&&performance.now&&performance.now()>1400);}
+  if(zaPozno()){sprzataj();return;}
+
+  /* Rozmiar na kurtynie i cel lotu MIERZYMY, nie zgadujemy. Sufit rozmiaru bierze
+     się z pikseli pliku podzielonych przez gęstość ekranu - powyżej tego znak
+     byłby miękki na telefonie (DPR 3). */
+  function wymiary(){
+    h.classList.add('intro-mierze');
+    var r=obraz.getBoundingClientRect();
+    h.classList.remove('intro-mierze');
+    if(!r.width||!r.height)return false;
+    var gestosc=Math.min(window.devicePixelRatio||1,3);
+    var sufit=(obraz.naturalWidth||798)/gestosc;
+    var cel=(window.innerWidth<680)?Math.min(window.innerWidth*0.72,320)
+                                   :Math.min(window.innerWidth*0.42,470);
+    cel=Math.max(r.width,Math.min(cel,sufit));
+    h.style.setProperty('--i-w',Math.round(cel)+'px');
+    h.style.setProperty('--i-h',Math.round(cel*r.height/r.width)+'px');
+    h.style.setProperty('--i-zmniejsz',(r.width/cel).toFixed(4));   /* zawsze < 1 */
+    h.style.setProperty('--i-px',Math.round(r.left+r.width/2-window.innerWidth/2)+'px');
+    h.style.setProperty('--i-py',Math.round(r.top+r.height/2-window.innerHeight/2)+'px');
+    h.style.setProperty('--i-baza-w',Math.round(r.width)+'px');
+    h.style.setProperty('--i-baza-h',Math.round(r.height)+'px');
+    /* Faktura paska musi trafić W TEN SAM PIKSEL co faktura kurtyny, więc bierzemy
+       PRAWDZIWE okno (clientWidth, bez paska przewijania), nie 100vw. */
+    h.style.setProperty('--i-vw',h.clientWidth+'px');
+    h.style.setProperty('--i-vh',h.clientHeight+'px');
+    var pasek=document.querySelector('.nav');
+    if(pasek)h.style.setProperty('--i-pasek',Math.round(pasek.getBoundingClientRect().height)+'px');
+    return true;
+  }
+
+  /* Pod zasłoną liczy się JEDNO zdjęcie - nagłówek. `window.load` czekałby na
+     wszystkie 18 kadrów galerii i kurtyna wisiałaby dwa razy dłużej.
+     🔴 `complete` znaczy tylko „pobrane", NIE „narysowane" - dokładnie jak przy logo.
+     Na nagraniu widać było, że kurtyna zaczyna schodzić, gdy hero jeszcze się
+     rasteryzuje, i przez chwilę spod niej wychodzi biała płaszczyzna zamiast zdjęcia.
+     Piksele domyka dopiero decode(); gdyby się ociągał, i tak zdejmie nas SUFIT. */
+  var heroNarysowany=false,heroPytany=false;
+  function heroGotowe(){
+    if(heroNarysowany)return true;
+    if(!hero)hero=document.querySelector('.hero-fach .hf-photo');
+    if(!(hero&&hero.complete&&hero.naturalWidth>0))return false;
+    if(!hero.decode){heroNarysowany=true;return true;}
+    if(!heroPytany){
+      heroPytany=true;
+      hero.decode().then(function(){heroNarysowany=true;},function(){heroNarysowany=true;});
+    }
+    return heroNarysowany;
+  }
+  function moze(){
+    if(zamkniete)return;
+    if(Date.now()-start>=MIN&&(heroGotowe()||zaladowane))zejdz();
+    else setTimeout(moze,70);
+  }
+  function zejdz(){
+    if(zamkniete||h.classList.contains('intro-out'))return;
+    h.classList.add('intro-out');
+    setTimeout(ogloszKoniec,420);        /* tynk minął miejsce tytułu - hero rusza */
+    setTimeout(sprzataj,800);            /* po przelocie znaku do paska (.76 s) */
+  }
+  function graj(){
+    if(zamkniete)return;
+    if(zaPozno()){sprzataj();return;}
+    if(!wymiary()){sprzataj();return;}   /* nie ma czego mierzyć - lepiej bez wejścia */
+    start=Date.now();
+    /* DWIE klatki: po jednej przeglądarka skleja stan startowy z końcowym */
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+      if(zamkniete)return;
+      h.classList.add('intro-gra');
+      moze();
+      setTimeout(zejdz,SUFIT);
+      setTimeout(sprzataj,3600);         /* twardy bezpiecznik, niezależny od wszystkiego */
+    });});
+  }
+
+  function pobrane(){return obraz.complete&&obraz.naturalWidth>0;}
+  function zacznij(){
+    if(zamkniete)return;
+    if(obraz.decode)obraz.decode().then(graj,graj);   /* complete = pobrane, decode = narysowane */
+    else graj();
+  }
+  if(pobrane())zacznij();
+  else{
+    obraz.addEventListener('load',zacznij);
+    obraz.addEventListener('error',sprzataj);         /* logo nie doszło = żadnego wejścia */
+    setTimeout(function(){pobrane()?zacznij():sprzataj();},CZEKANIE);
+  }
+
+  window.addEventListener('load',function(){zaladowane=true;});
+
+  /* Klik / dotyk / klawisz / przewinięcie przerywa natychmiast. */
+  var y0=window.scrollY||0;
+  ['click','touchstart','keydown'].forEach(function(zdarzenie){
+    window.addEventListener(zdarzenie,sprzataj,{passive:true});
+  });
+  window.addEventListener('scroll',function(){
+    if(Math.abs((window.scrollY||0)-y0)>6)sprzataj();
+  },{passive:true});
+})();
+</script>
+
 
 <main>
 <section class="hero-fach">
@@ -202,6 +366,6 @@
 <div class="sticky-call"><a class="sc-call" href="tel:+48733798878"><svg class="ico-tel" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.6 10.8a15.5 15.5 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.58 3.6a1 1 0 0 1-.25 1l-2.23 2.2Z" fill="currentColor"/></svg> Zadzwoń</a><a class="sc-quote" href="kontakt.html">Zadzwoń i opowiedz o ścianie</a></div>
 <div class="demo-wazne" data-do="2026-09-18" data-cykl="3" hidden><svg class="dw-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.2V12l3.3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="dw-txt"></span></div>
 
-<script src="assets/main.js"></script>
+<script src="assets/main.js?v=cd7ebe8d"></script>
 </body>
 </html>
